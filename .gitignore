@@ -1,0 +1,14 @@
+# raw data
+data.parquet
+*.parquet
+
+# dbt generated files
+target/
+dbt_packages/
+logs/
+dbt.log
+
+# python
+__pycache__/
+*.pyc
+.env
