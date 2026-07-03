@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: raw
+    dataset: ecom_dev
+    tables:
+      - name: raw_events
+        description: "Raw ecommerce event data from Kaggle - Nov 2019"
