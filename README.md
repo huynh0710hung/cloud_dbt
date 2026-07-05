@@ -1,34 +1,62 @@
-# cloud_dbt
+# E-Commerce Analytics Pipeline (cloud_dbt)
 
-An end-to-end e-commerce analytics pipeline that ingests raw event data from Kaggle, transforms it with dbt on BigQuery, and serves insights through a Looker Studio dashboard.
+An end-to-end data engineering project that ingests raw e-commerce event data from Kaggle, transforms it through a layered dbt pipeline on BigQuery, and serves insights through a Looker Studio dashboard.
 
-## Dashboard
+**Dashboard:** [Looker Studio →](https://datastudio.google.com/s/vaDlraNu_jw)
 
-[Looker Studio Dashboard](https://datastudio.google.com/s/vaDlraNu_jw)
+---
+
+## Tech Stack
+
+| Layer | Tool |
+|---|---|
+| Ingestion | Python + Kaggle API + PyArrow |
+| Storage | BigQuery + Parquet |
+| Transformation | dbt-core + dbt-bigquery |
+
+---
 
 ## Architecture
 
 ```
-Kaggle Dataset → Parquet → BigQuery (raw) → dbt (staging / transform / datamart) → Looker Studio
+Kaggle (CSV zip)
+      │
+      ▼
+kaggle_to_parquet.py          # stream CSV → Parquet (zstd compressed)
+      │
+      ▼
+data.parquet → BigQuery (raw)
+      │
+      ▼ dbt run
+┌─────────────────────────────────────────┐
+│  STAGING (view)                         │
+│  stg_events         stg_purchases       │
+└─────────────┬───────────────────────────┘
+              │
+┌─────────────▼───────────────────────────┐
+│  TRANSFORM (table)                      │
+│  dim_users      dim_products            │
+│  dim_categories dim_dates               │
+│  fact_events                            │
+└─────────────┬───────────────────────────┘
+              │
+┌─────────────▼───────────────────────────┐
+│  DATAMART (table)                       │
+│  dm_daily_summary   dm_funnel_analysis  │
+│  dm_funnel_summary  dm_brand_performance│
+│  dm_product_performance                 │
+│  dm_category_analysis                   │
+│  dm_customer_rfm    dm_customer_ltv     │
+│  dm_user_cohort     dm_behavior_by_hour │
+└─────────────────────────────────────────┘
+              │
+              ▼
+       Looker Studio
 ```
 
-## Data Source
+---
 
-[eCommerce behavior data from multi-category store](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store) — user event logs (view, cart, purchase) from a large online store.
-
-## Project Structure
-
-```
-├── ingestion/
-│   └── kaggle_to_parquet.py   # Downloads Kaggle dataset and converts CSVs to Parquet
-└── dbt/
-    └── models/
-        ├── staging/            # Raw source cleaning (events, purchases)
-        ├── transform/          # Dimensional model (users, products, categories, dates, fact_events)
-        └── datamart/           # Analytics-ready marts
-```
-
-### dbt Datamart Models
+## Datamarts
 
 | Model | Description |
 |---|---|
@@ -38,32 +66,68 @@ Kaggle Dataset → Parquet → BigQuery (raw) → dbt (staging / transform / dat
 | `dm_product_performance` | Revenue, conversion rate, and order count by product |
 | `dm_category_analysis` | Performance breakdown by category |
 | `dm_brand_performance` | Revenue and conversion metrics by brand |
-| `dm_customer_rfm` | RFM (Recency, Frequency, Monetary) segmentation |
-| `dm_customer_ltv` | Customer lifetime value |
+| `dm_customer_rfm` | Customer segmentation: Champions / Loyal / At Risk / Lost |
+| `dm_customer_ltv` | Estimated lifetime value per user |
 | `dm_user_cohort` | Cohort retention analysis |
-| `dm_behavior_by_hour` | Event volume by hour of day |
+| `dm_behavior_by_hour` | Shopping behaviour by hour of day |
 
-## Setup
+---
 
-### 1. Ingestion
+## Quickstart
 
-Install dependencies and configure Kaggle credentials (`~/.kaggle/kaggle.json`), then run:
-
+**1. Clone and install dependencies**
 ```bash
-pip install kaggle pyarrow
-python ingestion/kaggle_to_parquet.py
+git clone https://github.com/huynh0710hung/cloud_dbt
+cd cloud_dbt
+pip install kaggle pyarrow dbt-bigquery
 ```
 
-This downloads `2019-Oct.csv` from the Kaggle dataset, streams it into `data.parquet`, and cleans up the zip.
+**2. Configure credentials**
 
-### 2. dbt
+- Kaggle: place `kaggle.json` at `~/.kaggle/kaggle.json`
+- BigQuery: configure `~/.dbt/profiles.yml` with profile name `cloud_dbt`
 
+**3. Ingest data**
+```bash
+python ingestion/kaggle_to_parquet.py
+```
+Downloads `2019-Oct.csv` from the [eCommerce behavior dataset](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store), streams it to `data.parquet`, and uploads to BigQuery.
+
+**4. Install dbt packages**
 ```bash
 cd dbt
-pip install dbt-bigquery
 dbt deps
+```
+
+**5. Run the pipeline**
+```bash
 dbt run
+```
+
+**6. Run data quality tests**
+```bash
 dbt test
 ```
 
-Configure your BigQuery connection in `~/.dbt/profiles.yml` using the profile name `cloud_dbt`.
+**7. Explore lineage and docs**
+```bash
+dbt docs generate && dbt docs serve
+# Open http://localhost:8080
+```
+
+---
+
+## Project Structure
+
+```
+cloud_dbt/
+├── ingestion/
+│   └── kaggle_to_parquet.py   # Download Kaggle dataset → Parquet
+└── dbt/
+    ├── models/
+    │   ├── staging/            # Raw source → cast, rename, filter
+    │   ├── transform/          # Dimensions + fact table
+    │   └── datamart/           # Analytics-ready aggregates
+    ├── dbt_project.yml
+    └── packages.yml
+```
